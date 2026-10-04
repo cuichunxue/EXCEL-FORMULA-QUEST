@@ -1218,12 +1218,41 @@
       b.classList.add('sel'); b.textContent = b.textContent.replace('□', '■');
       const m = D.myWork.find((x) => x.id === b.dataset.id);
       S.tomorrow = { job: m.id, mission: m.mission, date: todayKey() }; save();
-      $('#tm', w).innerHTML = `<div class="tomorrow-card"><span class="badge yellow">TOMORROW MISSION</span><p>${esc(m.mission)}</p><small>困ったら ⚡10秒RESCUE。使えたら、トップ画面で「使えた！」を押してね。</small></div>
+      $('#tm', w).innerHTML = `<div class="tomorrow-card"><span class="badge yellow">TOMORROW MISSION</span><p>${esc(m.mission)}</p><small>困ったら ⚡10秒RESCUE。使えたら、トップ画面で「使えた！」を押してね。</small>
+        <div class="tm-remind"><span class="small">明日、思い出せるように：</span><button class="btn sm" id="tmIcs">📅 カレンダーに入れる（.ics）</button><button class="btn sm ghost" id="tmCopy">📋 リマインド文をコピー</button></div></div>
         <p class="clear-msg">学習の終了をCLEARとしない。<br><b>実務で使えた瞬間を、本当のCLEARとする。</b></p><button class="btn primary" id="tmOk">${o.inModal ? 'OK（この画面に戻る）' : 'トップへ'}</button>`;
+      $('#tmIcs', w).onclick = () => downloadReminder(m);
+      $('#tmCopy', w).onclick = () => copy(reminderText(m));
       $('#tmOk', w).onclick = o.inModal ? () => { closeOverlay(); const ce = $('#ceWork'); if (ce) ce.closest('.ce-work').innerHTML = '<span class="small">📌 TOMORROW MISSION を設定しました</span>'; } : home;
     }));
   }
   RENDER.mywork = (w) => renderMyWork(w);
+  // ---------- 翌日のきっかけ（アプリの外）：カレンダー予定とリマインド文 ----------
+  function nextWorkday() {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0); return d;
+  }
+  const appUrl = () => (/^https?:/.test(location.href) ? location.href.split('#')[0] : '');
+  function reminderText(m) {
+    const d = nextWorkday();
+    return '【FORMULA QUEST｜TOMORROW MISSION】' + (d.getMonth() + 1) + '/' + d.getDate() + '\n' + m.mission + '\n困ったら ⚡10秒RESCUE で式をコピー。使えたらアプリで「使えた！」を押す。' + (appUrl() ? '\n' + appUrl() + '#rescue' : '');
+  }
+  function downloadReminder(m) {
+    const d = nextWorkday(), e = new Date(d.getTime() + 15 * 60000);
+    const f = (x) => x.getFullYear() + String(x.getMonth() + 1).padStart(2, '0') + String(x.getDate()).padStart(2, '0') + 'T' + String(x.getHours()).padStart(2, '0') + String(x.getMinutes()).padStart(2, '0') + '00';
+    const icsEsc = (t) => t.replace(/[\\;,]/g, (c) => '\\' + c).replace(/\n/g, '\\n');
+    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//EXCEL FORMULA QUEST//JA', 'BEGIN:VEVENT',
+      'UID:efq-' + Date.now() + '@formula-quest', 'DTSTAMP:' + new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z',
+      'DTSTART:' + f(d), 'DTEND:' + f(e), 'SUMMARY:' + icsEsc('【FORMULA QUEST】' + m.t + 'を1回使う'),
+      'DESCRIPTION:' + icsEsc(reminderText(m)), 'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEsc('TOMORROW MISSION'), 'TRIGGER:-PT0M', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
+    a.download = 'formula-quest-tomorrow.ics';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast('カレンダー用ファイルを保存しました。開くと予定に追加できます。', 'good');
+  }
   function openMyWorkModal() {
     modal('<div class="mywork-modal"></div>');
     renderMyWork($('.mywork-modal'), { inModal: true });

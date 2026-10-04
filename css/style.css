@@ -464,6 +464,8 @@ b.bad { color: var(--red); } b.good { color: var(--green); }
 .tomorrow-card { margin-top: 10px; padding: 16px; border-radius: 14px; background: var(--navy); color: var(--on-dark); border: 2px solid var(--yellow); }
 .tomorrow-card p { font-size: 18px; font-weight: 800; margin: 8px 0; }
 .tomorrow-card small { color: var(--on-dark-muted); }
+.tm-remind { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #36506f; }
+.tm-remind .btn.ghost { color: var(--on-dark); }
 .clear-msg { text-align: center; font-size: 16px; margin: 16px 0; }
 .mission.solo { background: transparent; }
 

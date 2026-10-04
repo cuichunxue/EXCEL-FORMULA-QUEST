@@ -157,6 +157,12 @@ const url = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => window.EFQApp.startMission('c2'));
   await click('#go'); await click('#exitBtn'); await click('#exitWork'); await click('.mywork .opt'); await snap('exit_mywork');
   if (!(await page.evaluate(() => window.EFQApp.state().tomorrow))) errors.push('tomorrow mission not set from exit');
+  // 翌日のきっかけ：カレンダー予定（.ics）を保存できる
+  const [dl] = await Promise.all([page.waitForEvent('download'), click('#tmIcs')]);
+  const icsText = fs.readFileSync(await dl.path(), 'utf8');
+  const dt = /DTSTART:(\d{4})(\d{2})(\d{2})T090000/.exec(icsText);
+  if (!/BEGIN:VCALENDAR/.test(icsText) || !dt || !/TOMORROW MISSION/.test(icsText)) errors.push('bad ics: ' + icsText.slice(0, 200));
+  else { const wd = new Date(+dt[1], +dt[2] - 1, +dt[3]).getDay(); if (wd === 0 || wd === 6) errors.push('reminder falls on a weekend'); }
   await click('#tmOk');
   // 途中再開：第6章のステップ2（レポート①修正済み）から戻れる
   await page.evaluate(() => window.EFQApp.startMission('c6'));
