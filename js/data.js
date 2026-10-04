@@ -149,7 +149,7 @@
   const missions = {
     // ---------- 第1章 FIRST SUCCESS ----------
     c1: {
-      title: 'FIRST SUCCESS', chapter: 1, job: 'sum', next: 'c2',
+      mins: 5, title: 'FIRST SUCCESS', chapter: 1, job: 'sum', next: 'c2',
       steps: [
         { type: 'talk', who: 'navi', voice: 'start', text: 'ようこそ、みらい精機へ。関数を覚えなくて大丈夫。まずは今日の日報から、かんたんな仕事を1つ片づけよう。' },
         { type: 'choice', tag: 'WHAT', skill: 'WHAT', sheet: '本日', title: 'REQUEST', request: '今日の生産数を全部合計してください。',
@@ -188,7 +188,7 @@
     },
     // ---------- 第2章 MISSION ENGINE & X-RAY ----------
     c2: {
-      title: 'X-RAY MISSION', chapter: 2, job: 'sum', next: 'c3',
+      mins: 5, title: 'X-RAY MISSION', chapter: 2, job: 'sum', next: 'c3',
       steps: [
         { type: 'talk', who: 'boss', text: 'ラインBの「10月」の生産数を出してくれ。9月分は入れないように。' },
         { type: 'choice', tag: 'WHAT', skill: 'WHAT', sheet: '生産実績', title: 'WHAT', request: 'ラインB・10月の生産数を求めて。',
@@ -237,7 +237,7 @@
     },
     // ---------- 第3章 SILENT ERROR ----------
     c3: {
-      title: 'SILENT ERROR', chapter: 3, job: 'sum', next: 'c4',
+      mins: 5, title: 'SILENT ERROR', chapter: 3, job: 'sum', next: 'c4',
       steps: [
         { type: 'talk', who: 'support', text: '先輩が作った集計表があるんだ。ラインB・10月の数字、このまま提出していいかな？' },
         { type: 'detect', skill: 'DETECT', sheet: '生産実績', title: 'FORMULA DETECTIVE', voice: 'silent',
@@ -260,7 +260,7 @@
     },
     // ---------- 第4章 DEBUG & RECOVERY ----------
     c4: {
-      title: 'DEBUG MISSION', chapter: 4, job: 'lookup', next: 'c5',
+      mins: 4, title: 'DEBUG MISSION', chapter: 4, job: 'lookup', next: 'c5',
       steps: [
         { type: 'talk', who: 'support', text: '出荷指示に品名を自動で出したら、1行だけ #N/A が出た…。原因を調べよう。' },
         { type: 'debug', skill: 'DEBUG', sheet: '出荷指示', title: 'DEBUG MISSION', cell: 'B5', formula: '=XLOOKUP(A5,マスター!A:A,マスター!B:B)', variant: 'fullwidth' },
@@ -278,7 +278,7 @@
     },
     // ---------- 第5章 AI REVIEW ----------
     c5: {
-      title: 'AI REVIEW', chapter: 5, job: 'sum', next: 'c6',
+      mins: 3, title: 'AI REVIEW', chapter: 5, job: 'sum', next: 'c6',
       steps: [
         { type: 'talk', who: 'ai', text: 'Excelの式なら任せてください！ いくつか提案します。ただし…ちゃんと確認してくださいね。' },
         { type: 'ai', skill: 'AI REVIEW', title: 'AI REVIEW', sheet: '生産実績',
@@ -297,7 +297,7 @@
     },
     // ---------- 第6章 THE BROKEN REPORT ----------
     c6: {
-      title: 'THE BROKEN REPORT', chapter: 6, job: 'sum', next: 'c7', final: true,
+      mins: 8, title: 'THE BROKEN REPORT', chapter: 6, job: 'sum', next: 'c7', final: true,
       steps: [
         { type: 'talk', who: 'boss', clock: '15:40', voice: 'final', text: '16時の会議資料、数字が合わない。確認して。' , finalIntro: true },
         { type: 'detect', skill: 'DETECT', clock: '15:43', sheet: '生産実績', title: 'REPORT ① ラインB 10月 生産数', report: 0,
@@ -327,7 +327,7 @@
     },
     // ---------- 第7章 BRIDGE → CARD → MY WORK ----------
     c7: {
-      title: 'BRIDGE MISSION', chapter: 7, job: 'sum', next: null,
+      mins: 5, title: 'BRIDGE MISSION', chapter: 7, job: 'sum', next: null,
       steps: [
         { type: 'talk', who: 'support', text: '本物の現場ファイルはこんな感じ。列名もバラバラ、空白行、古い式のエラー…。でも「JobとLogicは同じ」だよ。' },
         { type: 'bridge', skill: 'TRANSFER', sheet: '10月実績(最終)', title: 'BRIDGE MISSION', request: 'Bラインの10月の生産数を出して。', correct: 1248 },
@@ -338,7 +338,7 @@
 
     // ===================== JOB MINI MISSIONS =====================
     lookup: {
-      title: 'マスター検索', job: 'lookup', next: null, mini: true,
+      mins: 7, title: 'マスター検索', job: 'lookup', next: null, mini: true,
       steps: [
         { type: 'talk', who: 'navi', voice: 'start', text: '出荷指示に品名を自動で出したい。マスター表から「探して持ってくる」仕事だよ。' },
         { type: 'choice', tag: 'WHAT', skill: 'WHAT', sheet: '出荷指示', title: 'WHAT', request: 'A2の品番（A-002）の品名を、マスターから表示して。',
@@ -363,7 +363,7 @@
       ],
     },
     judge: {
-      title: '自動判定', job: 'judge', next: null, mini: true,
+      mins: 5, title: '自動判定', job: 'judge', next: null, mini: true,
       steps: [
         { type: 'talk', who: 'navi', voice: 'start', text: '検査結果をOK/NGで自動判定しよう。基準は「測定値が400以上ならOK」。' },
         { type: 'choice', tag: 'LOGIC', skill: 'LOGIC', sheet: '検査結果', title: 'LOGIC', request: '測定値が400以上ならOK、それ以外はNG。',
@@ -387,7 +387,7 @@
       ],
     },
     count: {
-      title: '件数集計', job: 'count', next: null, mini: true,
+      mins: 5, title: '件数集計', job: 'count', next: null, mini: true,
       steps: [
         { type: 'talk', who: 'navi', voice: 'start', text: '不良実績から「外観不良」が何件あるか数えよう。' },
         { type: 'choice', tag: 'WHAT', skill: 'WHAT', sheet: '不良実績', title: 'WHAT', request: '外観不良は何件？',
@@ -413,7 +413,7 @@
       ],
     },
     clean: {
-      title: 'データ整形', job: 'clean', next: null, mini: true,
+      mins: 5, title: 'データ整形', job: 'clean', next: null, mini: true,
       steps: [
         { type: 'talk', who: 'support', text: '受入データの「Bライン」を数えたら、3件あるはずが1件になった…。見えない何かがいる。' },
         { type: 'detect', skill: 'DETECT', sheet: '受入データ', title: 'FORMULA DETECTIVE', request: 'Bラインの行は何件？', formula: '=COUNTIF(A:A,"Bライン")', correct: 3, showSpaces: true,
@@ -430,7 +430,7 @@
       ],
     },
     error: {
-      title: 'エラー確認', job: 'error', next: null, mini: true,
+      mins: 6, title: 'エラー確認', job: 'error', next: null, mini: true,
       steps: [
         { type: 'talk', who: 'navi', voice: 'start', text: 'エラーは失敗じゃなくて「手がかり」。消すのではなく、原因を見つけよう。' },
         { type: 'debug', skill: 'DEBUG', sheet: '出荷指示', title: 'DEBUG MISSION', cell: 'B5', formula: '=XLOOKUP(A5,マスター!A:A,マスター!B:B)', variant: 'fullwidth' },

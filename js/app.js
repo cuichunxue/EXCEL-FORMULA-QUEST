@@ -47,7 +47,9 @@
     if (level === 'VERIFIED' && cur < 2) return; // 検証は「作れた」後
     if (n > cur) { S.mastery[job] = level; save(); }
   }
-  function logWeek(kind) { S.log.push({ d: todayKey(), k: kind }); S.log = S.log.slice(-300); save(); }
+  // 1週間ログ：学習のクリア・検証・実務利用・RESCUEコピーだけを記録（v2）
+  function logWeek(kind, job) { S.log.push({ v: 2, d: todayKey(), k: kind, job: job || null }); S.log = S.log.slice(-300); save(); }
+  function markCleared() { if (!run || run.cleared) return; run.cleared = true; logWeek('clear', run.m.job); }
   function useFns(list) { for (const f of list) { session.fns.add(f); if (!S.fnsUsed.includes(f)) S.fnsUsed.push(f); } save(); }
 
   // ===================== SOUND / VOICE =====================
@@ -310,6 +312,7 @@
             <img src="assets/img/icons/${j.icon}" alt="" class="job-ico">
             <span class="job-t">${esc(j.title)}</span>
             <span class="job-s">${esc(j.sub)}</span>
+            <span class="job-time">⏱ 約${D.missions[j.mission].mins}分${j.mission === 'c1' ? '（続きは章ごとに選べます）' : ''}</span>
             <span class="job-m">${masteryDots(j.id)}</span>
           </button>`).join('')}
         </div>
@@ -343,7 +346,7 @@
   }
   function realWin() {
     const tm = S.tomorrow; if (!tm) return;
-    S.realWins++; raise(tm.job, 'TRANSFERRED'); logWeek(tm.job); logWeek('real');
+    S.realWins++; raise(tm.job, 'TRANSFERRED'); logWeek('real', tm.job);
     S.tomorrow = null; save(); sfx('clear');
     modal(`<div class="realwin"><div class="big-emoji">🏭</div><h2>REAL-WORK SUCCESS</h2>
       <p>学習の終了をCLEARとしない。<br><b>実務で使えた瞬間を、本当のCLEARとする。</b></p>
@@ -354,21 +357,26 @@
   // ---------- WEEK ----------
   function weekSummary() {
     const since = new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10);
-    const recent = S.log.filter((x) => x.d >= since);
+    const recent = S.log.filter((x) => x.v === 2 && x.d >= since);
     if (!recent.length) return null;
-    const groups = { sum: '条件集計', lookup: 'Lookup', judge: '自動判定', count: '件数集計', clean: 'データ整形', error: 'エラー確認', verify: 'Verify', ai: 'AI確認', rescue: 'RESCUE', real: '実務で使用' };
-    const c = {};
-    recent.forEach((x) => { if (groups[x.k]) c[x.k] = (c[x.k] || 0) + 1; });
-    const jobKeys = Object.keys(c).filter((k) => JOB_NAME[k]);
-    const top = jobKeys.sort((a, b) => c[b] - c[a])[0];
+    const count = (kind) => { const c = {}; recent.filter((x) => x.k === kind && x.job).forEach((x) => (c[x.job] = (c[x.job] || 0) + 1)); return c; };
+    const real = count('real'), clear = count('clear'), rescue = count('rescue');
+    const verify = recent.filter((x) => x.k === 'verify').length;
+    const byUse = (o) => Object.keys(o).sort((a, b) => o[b] - o[a]);
+    const top = byUse(real)[0] || byUse(rescue)[0] || byUse(clear)[0];
     const NEXT = { sum: ['count', 'COUNTIFS（件数集計）'], lookup: ['error', 'IFERRORの正しい使い方'], judge: ['sum', 'SUMIFS（条件集計）'], count: ['clean', 'TRIM（データ整形）'], clean: ['lookup', 'XLOOKUP（マスター検索）'], error: ['c5', 'AI REVIEW'] };
-    return { c, groups, top, next: top ? NEXT[top] : ['c1', 'FIRST SUCCESS'] };
+    return { real, clear, rescue, verify, top, next: top ? NEXT[top] : ['c1', 'FIRST SUCCESS'] };
   }
   function weekHTML(w) {
-    return `<section class="panel week"><h3>YOUR WEEK</h3><div class="week-rows">` +
-      Object.keys(w.c).map((k) => `<div class="wr"><span>${esc(w.groups[k])}</span><span class="checks">${'✓'.repeat(Math.min(w.c[k], 12))}</span></div>`).join('') +
-      `</div>${w.top ? `<p>よく使った仕事：<b>${esc(JOB_NAME[w.top])}</b></p>` : ''}
-      <div class="row gap center-v"><span>次のおすすめ：<b>${esc(w.next[1])}</b> <span class="muted">約30秒〜</span></span>
+    const rows = (o, cls) => Object.keys(o).map((k) => `<div class="wr"><span>${esc(JOB_NAME[k] || k)}</span><span class="checks ${cls || ''}">${'✓'.repeat(Math.min(o[k], 12))}</span></div>`).join('');
+    const block = (title, o, cls, empty) => `<div class="week-block"><h4>${title}</h4>${Object.keys(o).length ? rows(o, cls) : `<p class="muted small">${empty}</p>`}</div>`;
+    return `<section class="panel week"><h3>YOUR WEEK</h3><div class="week-cols">` +
+      block('🏭 実務で使えた', w.real, 'real', 'まだありません。TOMORROW MISSIONで「使えた！」を押すとここに記録されます。') +
+      block('⚡ 仕事中にRESCUE', w.rescue, '', '式をCOPYするとここに記録されます。') +
+      block('🎯 学習でクリア', w.clear, 'learn', 'ミッションをクリアするとここに記録されます。') +
+      `</div>${w.verify ? `<p class="small">🛡 検証（VERIFY）を ${w.verify} 回やり切りました。</p>` : ''}
+      ${w.top ? `<p>よく使った仕事：<b>${esc(JOB_NAME[w.top])}</b></p>` : ''}
+      <div class="row gap center-v"><span>次のおすすめ：<b>${esc(w.next[1])}</b> <span class="muted">約5分</span></span>
       <button class="btn sm week-next" data-m="${w.next[0]}">やってみる ▶</button></div></section>`;
   }
 
@@ -377,8 +385,8 @@
     stopRun(); setTop('QUEST MAP');
     const desc = { c1: 'かんたんな成功 → 小さな挑戦 → AI CHECK', c2: 'WHAT → LOGIC → CHOOSE → BUILD → X-RAY → READ → PREDICT', c3: 'サイレントエラー発見 → DETECT → REPAIR → 10秒VERIFY', c4: '#N/A の原因診断 → RECOVERY', c5: 'AIの式を ACCEPT / CHECK / REPAIR / REJECT', c6: '15:40 → 16:00 数字が合わない会議資料を救え', c7: '実務に近い汚れたデータ → FORMULA CARD → MY WORK' };
     app().innerHTML = `<section class="qmap"><h2>QUEST MAP</h2><p class="muted">Easy Success → Small Challenge → Trap → Discovery → Recovery → Hard Challenge</p><ol class="chapters">` +
-      D.chapters.map((c, i) => { const m = D.missions[c]; return `<li><button class="chapter ${S.chapters[c] ? 'done' : ''}" data-c="${c}"><span class="ch-n">${i + 1}</span><span class="ch-t"><b>${esc(m.title)}</b><small>${esc(desc[c])}</small></span><span class="ch-s">${S.chapters[c] ? '✓ CLEAR' : '▶'}</span></button></li>`; }).join('') +
-      `</ol><button class="btn ghost" id="mapBack">← トップへ</button></section>`;
+      D.chapters.map((c, i) => { const m = D.missions[c]; return `<li><button class="chapter ${S.chapters[c] ? 'done' : ''}" data-c="${c}"><span class="ch-n">${i + 1}</span><span class="ch-t"><b>${esc(m.title)} <span class="ch-min">約${m.mins}分</span></b><small>${esc(desc[c])}</small></span><span class="ch-s">${S.chapters[c] ? '✓ CLEAR' : '▶'}</span></button></li>`; }).join('') +
+      `</ol><p class="muted small">全7章で約${D.chapters.reduce((a, c) => a + D.missions[c].mins, 0)}分。1章ずつ区切って進められます。</p><button class="btn ghost" id="mapBack">← トップへ</button></section>`;
     $$('.chapter').forEach((b) => (b.onclick = () => startMission(b.dataset.c)));
     $('#mapBack').onclick = home;
   }
@@ -415,7 +423,7 @@
       const label = { c1: 'FIRST SUCCESS：まず1式を完成', c2: 'X-RAY MISSION：何を・どの条件で', c3: 'SILENT ERROR：正常な式を疑う', c4: 'DEBUG：エラーの原因を特定', c5: 'AI REVIEW：AIの式を検証', c6: 'THE BROKEN REPORT：総合実戦' };
       app().innerHTML = `<section class="panel challenge-result"><h2>YOUR FORMULA MAP</h2>
         <div class="map">${ans.map((a) => `<div class="mrow"><span>${esc(a.skill)}</span><span class="stars">${starHTML(map[a.skill])}</span></div>`).join('')}</div>
-        <h3>今日おすすめのMISSION</h3><div class="recs">${recs.map((r) => `<button class="btn rec" data-m="${r}">${esc(label[r] || D.missions[r].title)} ▶</button>`).join('')}</div>
+        <h3>今日おすすめのMISSION</h3><div class="recs">${recs.map((r) => `<button class="btn rec" data-m="${r}">${esc(label[r] || D.missions[r].title)}（約${D.missions[r].mins}分） ▶</button>`).join('')}</div>
         <p class="muted">★は「今の得意・不得意の目安」。ここから伸ばしていきます。</p>
         <button class="btn ghost" id="chHome">トップへ</button></section>`;
       $$('.rec').forEach((b) => (b.onclick = () => startMission(b.dataset.m)));
@@ -428,10 +436,10 @@
   function startMission(id) {
     stopRun();
     const m = D.missions[id];
+    const cap = $('#caption'); if (cap) cap.classList.remove('show');
     run = { id, m, i: 0, wb: clone(D.workbook), fails: 0, gained: [], reportFix: {}, t0: Date.now() };
     if (m.final && S.timer) run.deadline = Date.now() + 5 * 60 * 1000;
     session.jobs.add(m.job);
-    logWeek(m.job);
     renderStep();
   }
   function stopRun() {
@@ -519,7 +527,20 @@
     if (m.next) return startMission(m.next);
     home();
   }
-  // 失敗の記録と感情適応
+  // 失敗の記録と感情適応（3回連続でつまずいたら、段階に合った声かけ）
+  const ADAPTIVE = {
+    WHAT: '式を覚えなくて大丈夫。<br>まず<b>“何を求めたいか”</b>を確認しよう。',
+    LOGIC: '依頼文をもう一度ゆっくり。<br><b>「〜だけ」「〜の」</b>の部分が条件だよ。',
+    CHOOSE: '関数名で選ばなくて大丈夫。<br><b>「何をしたいか」</b>（足す？数える？探す？）で選ぼう。',
+    BUILD: '式を覚えなくて大丈夫。<br>まず<b>“何を求めたいか”</b>を確認しよう。',
+    REPAIR: '直す場所は1か所だけのことが多いよ。<br><b>依頼文と式を見比べて</b>、足りない部分を探そう。',
+    READ: '式は左から読めばOK。<br><b>1つずつ意味のブロック</b>に置き換えてみよう。',
+    PREDICT: 'ぴったり当てなくて大丈夫。<br><b>ざっくりの桁</b>が合えば十分だよ。',
+    DETECT: 'エラーが出ていないのに違う…は、誰でも迷うところ。<br><b>X-RAYで、式が使った行</b>を見てみよう。',
+    DEBUG: 'エラーは手がかり。<br><b>調査ツールを1つずつ押して</b>、証拠を集めよう。',
+    'AI REVIEW': 'AIの式も、まずCHECK。<br><b>何を計算？ 条件は全部？</b> を1つずつ確かめよう。',
+    TRANSFER: '見た目が違っても、仕事は同じ。<br><b>「何を」「どの条件で」</b>を先に決めよう。',
+  };
   function fail(skill) {
     rec(skill, false);
     run.fails++; run.stepFails++;
@@ -529,8 +550,15 @@
       const prev = S.support;
       S.support = 0; save();
       openHints(1);
-      modal(`<div class="adaptive"><img src="${D.chars.navi.img}" class="avatar lg" alt=""><div><p class="say">式を覚えなくて大丈夫。<br>まず<b>“何を求めたいか”</b>を確認しよう。</p>
-        <p class="muted">サポートを ${LEVELS[prev].k} → A（FULL GUIDE）に戻し、ヒントを開きました。うまくいったら、また少しずつ減らしていきます。</p>
+      const st0 = run.m.steps[run.i];
+      const builds = st0 && ['build', 'repair', 'bridge'].includes(st0.type);
+      const hasHints = !!$('#hintList') && !$('#hints').hidden;
+      const msg = ADAPTIVE[skill] || ADAPTIVE.BUILD;
+      const done = [];
+      if (builds && prev > 0) done.push('式づくりのサポートを ' + LEVELS[prev].k + ' → A（FULL GUIDE）に戻しました');
+      if (hasHints) done.push('ヒントを1つ開きました');
+      modal(`<div class="adaptive"><img src="${D.chars.navi.img}" class="avatar lg" alt=""><div><p class="say">${msg}</p>
+        <p class="muted">${done.length ? done.join('。') + '。' : ''}間違いは失敗ではなく手がかりです。うまくいったら、また少しずつ支援を減らしていきます。</p>
         <button class="btn primary" data-close>OK、もう一度</button></div></div>`, () => { const st = run && run.m.steps[run.i]; if (st && st.type === 'build' && st.template && prev > 0) renderStep(); });
     } else if (run.stepFails === 2) {
       guideSay('ヒントを1つ開いてみよう。考え方からでOK。');
@@ -758,10 +786,12 @@
       <div id="stage"></div>
       <div class="sheet-area">${tabsHTML([s.sheet], s.sheet)}${sheetHTML(run.wb, s.sheet, { showSpaces: !!s.showSpaces })}</div>`;
     $('#submit', w).onclick = () => {
-      fail('DETECT');
+      // 提出は想定どおりの流れ。失敗ではなく「発見」のきっかけとして扱う
+      sfx('discovery');
       $('#choice', w).remove();
       $('#stage', w).innerHTML = `<div class="wait"><div class="wait-t">🚨 WAIT</div><div class="wait-cmp"><div><small>あなたが提出した値</small><b class="bad">${esc(fmt(res.value))}</b></div><div><small>正解</small><b class="good">${esc(fmt(s.correct))}</b></div></div>
-        <p>Excelは<b>エラーを出していません</b>。でも、正しくありません。原因を探そう。</p></div>`;
+        <p>Excelは<b>エラーを出していません</b>。でも、正しくありません。原因を探そう。</p>
+        <p class="small muted">多くの人がここで「提出」します。これが、エラーの出ない間違い（サイレントエラー）の怖さです。</p></div>`;
       causes();
     };
     $('#doubt', w).onclick = () => { sfx('click'); $('#choice', w).remove(); causes(true); };
@@ -776,7 +806,7 @@
         const fb = $('#fb', w);
         if (!c.ok) { b.classList.add('wrong'); b.disabled = true; fb.className = 'feedback bad'; fb.textContent = c.fb || 'もう少し調べてみよう。'; fail('DETECT'); return; }
         b.classList.add('right'); $$('.opt', st).forEach((x) => (x.disabled = true));
-        succeed('DETECT', !doubted); sfx('discovery'); logWeek('verify');
+        succeed('DETECT', !doubted); sfx('discovery');
         if (s.voice) speak(s.voice);
         fb.className = 'feedback good';
         fb.innerHTML = `<div class="noerr-banner">NO ERROR ≠ CORRECT</div><p>🔍 ${esc(s.explain)}</p><p class="small">正しい結果：<b>${esc(fmt(s.correct))}</b></p>`;
@@ -852,7 +882,7 @@
       clearInterval(tick);
       const sec = ((Date.now() - t0) / 1000).toFixed(1);
       setPhase(4);
-      succeed('VERIFY'); raise(run.m.job, 'VERIFIED'); logWeek('verify');
+      succeed('VERIFY'); raise(run.m.job, 'VERIFIED'); logWeek('verify', run.m.job);
       sfx('verified');
       if (s.voice) speak(s.voice);
       if (s.finalClear) run.wb['月次レポート'].rows.forEach((row, i) => { if (!run.reportFix[i]) run.reportFix[i] = i === 0 ? s.formula : row[2]; });
@@ -912,7 +942,7 @@
         const f = fixes[+fbn.dataset.k]; const fb2 = $('#fb2', w);
         if (!f.ok) { fbn.classList.add('wrong'); fbn.disabled = true; fb2.className = 'feedback bad'; fb2.textContent = f.fb; fail('REPAIR'); return; }
         fbn.classList.add('right'); $$('#fixes .opt', w).forEach((x) => (x.disabled = true));
-        succeed('REPAIR'); sfx('correct'); raise('error', 'PRACTICED'); logWeek('error');
+        succeed('REPAIR'); sfx('correct'); raise('error', 'PRACTICED');
         if (variant === 'fullwidth') run.wb[sheet].rows[row - 2][0] = 'A-001';
         else computed.B = (r) => (r === row ? '=XLOOKUP(A' + r + ',マスター!A:A,マスター!B:B,"マスター未登録")' : '=XLOOKUP(A' + r + ',マスター!A:A,マスター!B:B)');
         $('#dsheet', w).innerHTML = tabsHTML([sheet, 'マスター'], sheet) + draw();
@@ -949,7 +979,6 @@
           if (checked) return; checked = true; b.disabled = true; sfx('click');
           $('#checks', w).innerHTML = '<div class="checklist"><b>🔎 CHECK</b>' + r.checks.map((c) => '<div class="ck">☑ ' + esc(c) + '</div>').join('') + '<button class="btn sm ghost" id="aix">🔬 X-RAYで見る</button><div id="aixa"></div></div>';
           $('#aix', w).onclick = () => { $('#aix', w).remove(); mountXray($('#aixa', w), run.wb, sheet, r.formula, {}); };
-          logWeek('ai');
           return;
         }
         if (!r.good.includes(a)) {
@@ -1041,9 +1070,9 @@
         const ok = picked.size === 3 && want.every((r) => picked.has(r));
         if (!ok) { fb.className = 'feedback bad'; fb.textContent = 'ﾗｲﾝ名がBラインで、月が10月の行は3行あるはず。見た目がそっくりな行にも注意。'; rec('VERIFY', false); return; }
         if (userV === s.correct) { done(true); return; }
-        sfx('warning'); phase = 3;
+        sfx('discovery'); phase = 3;
         fb.className = 'feedback bad';
-        fb.innerHTML = '<div class="wait-t">🚨 MISMATCH</div>手で数えると <b>1,248</b>、式は <b>' + esc(fmt(userV)) + '</b>。Excelはエラーを出していません。';
+        fb.innerHTML = '<div class="wait-t">🚨 MISMATCH</div>手で数えると <b>1,248</b>、式は <b>' + esc(fmt(userV)) + '</b>。Excelはエラーを出していません。<br><small>実務データでは、ほとんどの人がここで止まります。見つけられたこと自体が成果です。</small>';
         $('#bsheet', w).innerHTML = tabsHTML(tabs, sheet) + draw(); bind();
         detectPhase();
       };
@@ -1081,7 +1110,7 @@
     }
     function done(clean) {
       phase = 9;
-      succeed('TRANSFER'); succeed('VERIFY'); raise('sum', 'TRANSFERRED'); logWeek('verify');
+      succeed('TRANSFER'); succeed('VERIFY'); raise('sum', 'TRANSFERRED'); logWeek('verify', 'sum');
       sfx('verified');
       $('#after', w).innerHTML = `<div class="verified"><span class="shield">🌉</span><div><b>BRIDGE CLEAR — TRANSFERRED</b><small>${clean ? '最初から正しい値を出せた！ ' : ''}再計算 1,248 ＝ 手計算 1,248。汚れた実務データでも、JobとLogicは同じでした。</small></div></div>
         <ul class="bridge-learn"><li>列名が違っても「何を・どの条件で」は同じ</li><li>見えない空白・文字の数字は、エラーを出さずに数字を変える</li><li>だから最後は必ず VERIFY</li></ul>
@@ -1092,7 +1121,7 @@
 
   // ---------- CHAPTER END ----------
   RENDER.chapterEnd = (w, s) => {
-    S.chapters[run.id] = true; save();
+    S.chapters[run.id] = true; save(); markCleared();
     run.gained.push(...s.gained);
     const isFinal = run.m.final;
     sfx(isFinal ? 'clear' : 'verified');
@@ -1101,7 +1130,7 @@
       ${isFinal ? `<div class="final-clock">16:00</div><img src="${D.chars.boss.img}" class="avatar lg" alt=""><p class="boss-say">「…助かった。数字、合ってるな。」</p>` : ''}
       <div class="ce-title">${esc(s.title)}</div>
       <h3>持ち帰れる力</h3><ul class="gained">${s.gained.map((g) => '<li>✓ ' + esc(g) + '</li>').join('')}</ul>
-      <div class="row gap center">${nextM ? `<button class="btn primary" id="goNext">次の章へ：${esc(nextM.title)} ▶</button>` : ''}<button class="btn ghost" id="toCard">ここで終える（FORMULA CARD）</button></div></div>`;
+      <div class="row gap center">${nextM ? `<button class="btn primary" id="goNext">次の章へ：${esc(nextM.title)}（約${nextM.mins}分） ▶</button>` : ''}<button class="btn ghost" id="toCard">ここで終える（FORMULA CARD）</button></div></div>`;
     if (isFinal) speak('clear');
     if ($('#goNext', w)) $('#goNext', w).onclick = () => startMission(run.m.next);
     $('#toCard', w).onclick = () => { const id = run.id; renderCard(w, { fromChapter: id }); };
@@ -1111,6 +1140,7 @@
   function renderCard(w, o = {}) {
     sfx('clear');
     if (run && !run.m.mini && !run.m.next) { S.chapters[run.id] = true; save(); }
+    if (run && (run.m.mini || !run.m.next)) markCleared();
     const jobsDone = D.jobs.filter((j) => MASTERY.indexOf(S.mastery[j.id] || 'NEW') >= 2);
     const fns = S.fnsUsed.filter((f) => !['MAX', 'MIN'].includes(f));
     w.innerHTML = `<div class="fcard">
@@ -1145,8 +1175,9 @@
   RENDER.mywork = (w) => renderMyWork(w);
 
   // ===================== RESCUE =====================
+  const RESCUE_JOB = { sumifs: 'sum', countifs: 'count', xlookup: 'lookup', if: 'judge', trim: 'clean', iferror: 'error' };
   function openRescue(focus) {
-    sfx('click'); logWeek('rescue');
+    sfx('click');
     const ov = $('#overlay');
     ov.hidden = false;
     ov.innerHTML = `<div class="rescue" role="dialog" aria-label="10秒RESCUE"><div class="rs-head"><b>⚡ 10 SEC RESCUE</b><span>今、Excelで何をしたい？</span><button class="x" data-close aria-label="閉じる">✕</button></div>
@@ -1160,7 +1191,7 @@
       body.innerHTML = `<div class="rs-card"><div class="rs-fn">${esc(r.fn)}</div><code class="rs-syn">${esc(r.syntax)}</code>
         <div class="rs-ex"><code>${esc(r.example)}</code><button class="btn sm primary" id="copy">COPY</button></div>
         <button class="btn sm ghost" id="und">🧠 30 SEC UNDERSTAND</button><div id="undBody"></div></div>`;
-      $('#copy', body).onclick = () => copy(r.example);
+      $('#copy', body).onclick = () => { copy(r.example); logWeek('rescue', RESCUE_JOB[r.id]); };
       $('#und', body).onclick = () => {
         $('#und', body).remove();
         $('#undBody', body).innerHTML = `<div class="und"><p><b>意味：</b>${esc(r.meaning)}</p><div id="rx"></div><p><b>⚠ Trap：</b>${esc(r.trap)}</p><p><b>🛡 Verify：</b>${esc(r.verify)}</p></div>`;

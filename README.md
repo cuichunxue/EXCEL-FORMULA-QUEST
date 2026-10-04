@@ -39,6 +39,10 @@ Just-in-Time型 Excel Formula Performance Support System（要件定義 FINAL v3
 - **PROGRESSIVE HINT**：考え方 → カテゴリー → 関数名 → 構文 → 完成式。完成式を見た成功は「習得」扱いにしません。
 - **EMOTION ADAPTIVE**：3回連続でつまずくとナビが声をかけ、支援をAに戻してヒントを開きます。誤操作で止まる画面はありません（✕でいつでも終了でき、その時点で持ち帰れる技能を表示）。
 - **MASTERY MODEL**：NEW → DISCOVERED → PRACTICED → INDEPENDENT → VERIFIED → TRANSFERRED（Job単位）。
+- **WAIT（提出）は発見イベント**：DETECTで「このまま提出」を選ぶのは想定どおりの流れなので、失敗には数えません。3回つまずいたときの声かけは段階（WHAT / DETECT / DEBUG / AI REVIEW など）ごとに変わります。
+- **YOUR WEEK**：「実務で使えた」「仕事中にRESCUE（COPY）」「学習でクリア」を分けて記録します。ミッションを開いただけでは数えません。
+- **所要時間の表示**：Jobカード・QUEST MAP・章末の「次の章へ」に目安（約○分）を表示します。
+- **スマホ**：作業欄を最優先に表示し、ナビは1〜2行、字幕は画面上部の帯に出します。
 - **サウンド**：初期設定は OFF（職場利用のため）。ナレーションは字幕を常時表示し、音声はパック記載のリンク→ブラウザ読み上げの順で再生します。
 
 ## ファイル構成

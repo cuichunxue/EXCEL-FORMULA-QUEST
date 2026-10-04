@@ -106,6 +106,12 @@ const url = 'file://' + path.resolve(__dirname, '..', 'index.html');
     await snap('end_state');
   }
   await snap('home_after');
+  // YOUR WEEK は「ミッション開始」ではなくクリア等だけを記録する
+  const weekLog = await page.evaluate(() => window.EFQApp.state().log);
+  const badLog = weekLog.filter((x) => x.v !== 2 || !['clear', 'verify', 'real', 'rescue'].includes(x.k));
+  const chapterClears = weekLog.filter((x) => x.k === 'clear').length;
+  if (badLog.length) errors.push('week log has non-v2/unknown entries: ' + JSON.stringify(badLog.slice(0, 3)));
+  if (chapterClears !== 7) errors.push('expected 7 chapter clears, got ' + chapterClears);
   for (const job of ['lookup', 'judge', 'count', 'clean', 'error']) {
     await page.evaluate(() => window.EFQApp.home());
     await click(`.job[data-job="${job}"]`);
@@ -125,15 +131,36 @@ const url = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => window.EFQApp.startMission('c2'));
   await click('#go');
   for (let i = 1; i <= 2; i++) await click(`.opt[data-k="${i}"]`);
+  // 「提出」は失敗に数えない（WAITは発見イベント）
+  await page.evaluate(() => { localStorage.clear(); });
+  await page.reload();
   await page.evaluate(() => window.EFQApp.startMission('c3'));
-  await click('#go'); await click('#submit'); await click('#stage .opt[data-k="1"]'); await click('#stage .opt[data-k="2"]'); await page.waitForTimeout(200);
+  await click('#go'); await click('#submit'); await click('#stage .opt[data-k="0"]');
+  const detNg = await page.evaluate(() => (window.EFQApp.state().skills.DETECT || {}).ng || 0);
+  if (detNg !== 0) errors.push('submit counted as DETECT failure: ng=' + detNg);
+  // 3回の本当の誤答で、段階に合った声かけが出る
+  await page.evaluate(() => window.EFQApp.startMission('c3'));
+  await click('#go'); await click('#submit');
+  for (const k of [1, 2, 3]) await click(`#stage .opt[data-k="${k}"]`);
+  await page.waitForTimeout(200);
   const adaptive = await page.locator('.adaptive').count();
+  const adaptiveText = adaptive ? await page.locator('.adaptive .say').innerText() : '';
+  if (adaptive && !/X-RAY/.test(adaptiveText)) errors.push('adaptive message not DETECT-specific: ' + adaptiveText);
   await snap('adaptive');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => { document.querySelector('#overlay').hidden = true; window.EFQApp.home(); });
   await snap('mobile_home');
   await page.evaluate(() => window.EFQApp.startMission('c2'));
   await click('#go'); await click('.opt[data-k="0"]'); await snap('mobile_choice');
+  // スマホ：BUILD の最初の操作が1画面目に入る
+  await page.evaluate(() => window.EFQApp.startMission('c2'));
+  await click('#go');
+  for (const sel of ['.opt[data-k="0"]', '#nx']) await click(sel);
+  for (const sel of ['.opt[data-k="0"]', '.opt[data-k="1"]', '#multiOk', '#nx', '.opt[data-k="2"]', '#nx']) await click(sel);
+  await page.evaluate(() => scrollTo(0, 0));
+  const mobFirstY = await page.evaluate(() => { const b = [...document.querySelectorAll('#work button:not([disabled]),#work input')].find((x) => x.offsetParent); return b ? b.getBoundingClientRect().top : 9999; });
+  await snap('mobile_build');
+  if (mobFirstY > 844) errors.push('mobile build: first control below the fold at ' + Math.round(mobFirstY));
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   await browser.close();
   console.log('screenshots:', shot, 'adaptive modal:', adaptive, 'mobile h-overflow:', overflow);
