@@ -26,7 +26,7 @@
   try { S = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { S = fresh(); }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* private mode */ } };
   const sessionStart = Date.now();
-  const session = { jobs: new Set(), skills: {}, fns: new Set() };
+  const session = { jobs: new Set(), skills: {}, fns: new Set(), masteryStart: Object.assign({}, S.mastery) };
 
   function rec(skill, ok, assisted) {
     for (const bag of [S.skills, session.skills]) {
@@ -38,7 +38,8 @@
   function stars(skill, bag = S.skills) {
     const s = bag[skill];
     if (!s) return S.map && S.map[skill] ? S.map[skill] : 1;
-    return Math.max(1, Math.min(5, 1 + Math.round(s.ok + s.as * 0.5)));
+    const score = s.ok + s.as * 0.5;
+    return Math.max(1, Math.min(5, 1 + Math.floor(Math.log2(1 + score))));
   }
   function raise(job, level) {
     if (!job) return;
@@ -327,7 +328,7 @@
       <footer class="principles">
         <span>JOB FIRST</span><span>LOGIC BEFORE FORMULA</span><span>NO ERROR ≠ CORRECT</span><span>VERIFY BEFORE TRUST</span><span>FAILURE = DISCOVERY</span><span>競争相手は、少し前の自分。</span>
       </footer>`;
-    $$('.job').forEach((b) => (b.onclick = () => { sfx('click'); const j = D.jobs.find((x) => x.id === b.dataset.job); startMission(j.mission); }));
+    $$('.job').forEach((b) => (b.onclick = () => { sfx('click'); const j = D.jobs.find((x) => x.id === b.dataset.job); startJob(j); }));
     $('#goChallenge').onclick = () => { sfx('click'); challenge(); };
     $('#goMap').onclick = () => { sfx('click'); questMap(); };
     $('#goRescue').onclick = () => openRescue();
@@ -339,6 +340,19 @@
     }
     $$('.week-next').forEach((b) => (b.onclick = () => startMission(b.dataset.m)));
     window.scrollTo(0, 0);
+  }
+  // 初回だけ：Job選択の直後に60秒CHALLENGEを任意で提案（既定は「すぐ始める」）
+  function startJob(j) {
+    const firstVisit = !S.challengeOffered && !S.map && !Object.keys(S.mastery).length;
+    if (!firstVisit) return startMission(j.mission);
+    S.challengeOffered = true; save();
+    modal(`<div class="offer"><img src="${D.chars.navi.img}" class="avatar lg" alt=""><div>
+      <h2>「${esc(j.title)}」ですね。</h2>
+      <p>このまま始めるのがおすすめです（約${D.missions[j.mission].mins}分）。</p>
+      <p class="muted small">先に <b>60秒 WORK CHALLENGE</b> で得意・不得意を見てから始めることもできます。テストではありません。</p>
+      <div class="row gap"><button class="btn primary" id="offerGo">このまま始める ▶</button><button class="btn ghost" id="offerCh">⏱ 60秒で自分に合うスタートを探す</button></div></div></div>`);
+    $('#offerGo').onclick = () => { modal.cb = null; closeOverlay(); startMission(j.mission); };
+    $('#offerCh').onclick = () => { modal.cb = null; closeOverlay(); challenge(j); };
   }
   function masteryDots(job) {
     const m = MASTERY.indexOf(S.mastery[job] || 'NEW');
@@ -392,7 +406,7 @@
   }
 
   // ---------- 60 SEC WORK CHALLENGE ----------
-  function challenge() {
+  function challenge(fromJob) {
     stopRun(); setTop('60 SEC WORK CHALLENGE');
     app().innerHTML = `<section class="panel challenge-intro"><img src="assets/img/chars/navi.jpg" alt="" class="avatar lg">
       <div><h2>60秒 WORK CHALLENGE</h2><p><b>正解数を測るテストではありません。</b><br>あなたに役立つMISSIONを探します。</p>
@@ -423,7 +437,7 @@
       const label = { c1: 'FIRST SUCCESS：まず1式を完成', c2: 'X-RAY MISSION：何を・どの条件で', c3: 'SILENT ERROR：正常な式を疑う', c4: 'DEBUG：エラーの原因を特定', c5: 'AI REVIEW：AIの式を検証', c6: 'THE BROKEN REPORT：総合実戦' };
       app().innerHTML = `<section class="panel challenge-result"><h2>YOUR FORMULA MAP</h2>
         <div class="map">${ans.map((a) => `<div class="mrow"><span>${esc(a.skill)}</span><span class="stars">${starHTML(map[a.skill])}</span></div>`).join('')}</div>
-        <h3>今日おすすめのMISSION</h3><div class="recs">${recs.map((r) => `<button class="btn rec" data-m="${r}">${esc(label[r] || D.missions[r].title)}（約${D.missions[r].mins}分） ▶</button>`).join('')}</div>
+        <h3>今日おすすめのMISSION</h3><div class="recs">${fromJob ? `<button class="btn primary rec" data-m="${fromJob.mission}">選んだ仕事から始める：${esc(fromJob.title)}（約${D.missions[fromJob.mission].mins}分） ▶</button>` : ''}${recs.filter((r) => !fromJob || r !== fromJob.mission).map((r) => `<button class="btn rec" data-m="${r}">${esc(label[r] || D.missions[r].title)}（約${D.missions[r].mins}分） ▶</button>`).join('')}</div>
         <p class="muted">★は「今の得意・不得意の目安」。ここから伸ばしていきます。</p>
         <button class="btn ghost" id="chHome">トップへ</button></section>`;
       $$('.rec').forEach((b) => (b.onclick = () => startMission(b.dataset.m)));
@@ -1130,10 +1144,12 @@
       ${isFinal ? `<div class="final-clock">16:00</div><img src="${D.chars.boss.img}" class="avatar lg" alt=""><p class="boss-say">「…助かった。数字、合ってるな。」</p>` : ''}
       <div class="ce-title">${esc(s.title)}</div>
       <h3>持ち帰れる力</h3><ul class="gained">${s.gained.map((g) => '<li>✓ ' + esc(g) + '</li>').join('')}</ul>
-      <div class="row gap center">${nextM ? `<button class="btn primary" id="goNext">次の章へ：${esc(nextM.title)}（約${nextM.mins}分） ▶</button>` : ''}<button class="btn ghost" id="toCard">ここで終える（FORMULA CARD）</button></div></div>`;
+      <div class="row gap center">${nextM ? `<button class="btn primary" id="goNext">次の章へ：${esc(nextM.title)}（約${nextM.mins}分） ▶</button>` : ''}<button class="btn ghost" id="toCard">ここで終える（FORMULA CARD）</button></div>
+      ${S.tomorrow && S.tomorrow.date === todayKey() ? '' : '<p class="ce-work"><button class="btn sm ghost" id="ceWork">📌 明日の仕事で使う1回を決めておく</button></p>'}</div>`;
     if (isFinal) speak('clear');
     if ($('#goNext', w)) $('#goNext', w).onclick = () => startMission(run.m.next);
     $('#toCard', w).onclick = () => { const id = run.id; renderCard(w, { fromChapter: id }); };
+    if ($('#ceWork', w)) $('#ceWork', w).onclick = () => openMyWorkModal();
   };
 
   // ---------- FORMULA CARD ----------
@@ -1141,15 +1157,22 @@
     sfx('clear');
     if (run && !run.m.mini && !run.m.next) { S.chapters[run.id] = true; save(); }
     if (run && (run.m.mini || !run.m.next)) markCleared();
-    const jobsDone = D.jobs.filter((j) => MASTERY.indexOf(S.mastery[j.id] || 'NEW') >= 2);
-    const fns = S.fnsUsed.filter((f) => !['MAX', 'MIN'].includes(f));
+    const mi = (m) => MASTERY.indexOf(m || 'NEW');
+    const todayJobs = D.jobs.filter((j) => mi(S.mastery[j.id]) > mi(session.masteryStart[j.id]) || (session.jobs.has(j.id) && mi(S.mastery[j.id]) >= 2));
+    const isToday = todayJobs.length > 0;
+    const jobList = isToday ? todayJobs : D.jobs.filter((j) => mi(S.mastery[j.id]) >= 2);
+    const now = Object.fromEntries(COMPETENCY.map((k) => [k, stars(k)]));
+    const prev = S.lastCard || null;
+    S.lastCard = now; save();
+    const sk = (k) => session.skills[k] && session.skills[k].ok + session.skills[k].as > 0;
+    const fns = (session.fns.size ? [...session.fns] : S.fnsUsed).filter((f) => !['MAX', 'MIN'].includes(f));
     w.innerHTML = `<div class="fcard">
       <div class="fc-head"><div><span class="fc-title">YOUR FORMULA CARD</span><span class="fc-date">${esc(todayKey())}</span></div><img src="${D.chars.navi.img}" alt="" class="avatar"></div>
       <div class="fc-grid">
-        <div><h4>今日できるようになった仕事</h4><ul class="fc-jobs">${(jobsDone.length ? jobsDone : D.jobs.filter((j) => session.jobs.has(j.id))).map((j) => `<li><span class="ok">✓</span>${esc(j.skill)}<small>${esc(MASTERY_JA[S.mastery[j.id] || 'NEW'])}</small></li>`).join('')}
-          ${(S.skills.DETECT && S.skills.DETECT.ok + S.skills.DETECT.as) ? '<li><span class="ok">✓</span>間違い発見<small>サイレントエラー</small></li>' : ''}
-          ${(S.skills['AI REVIEW'] && S.skills['AI REVIEW'].ok + S.skills['AI REVIEW'].as) ? '<li><span class="ok">✓</span>AI式確認<small>VERIFY BEFORE TRUST</small></li>' : ''}</ul></div>
-        <div><h4>能力</h4><div class="map">${COMPETENCY.map((k) => `<div class="mrow"><span>${esc(k)}</span><span class="stars">${starHTML(stars(k))}</span></div>`).join('')}</div></div>
+        <div><h4>${isToday ? '今日できるようになった仕事' : 'これまでにできるようになった仕事'}</h4><ul class="fc-jobs">${jobList.map((j) => { const a = session.masteryStart[j.id] || 'NEW', b = S.mastery[j.id] || 'NEW'; return `<li><span class="ok">✓</span>${esc(j.skill)}<small>${isToday && a !== b ? esc(MASTERY_JA[a]) + ' → <b>' + esc(MASTERY_JA[b]) + '</b>' : esc(MASTERY_JA[b])}</small></li>`; }).join('') || '<li class="muted">まだありません</li>'}
+          ${sk('DETECT') ? '<li><span class="ok">✓</span>間違い発見<small>サイレントエラー</small></li>' : ''}
+          ${sk('AI REVIEW') ? '<li><span class="ok">✓</span>AI式確認<small>VERIFY BEFORE TRUST</small></li>' : ''}</ul></div>
+        <div><h4>能力 <small class="fc-sub">${prev ? '前回のCARDから' : '今回が最初のCARD'}</small></h4><div class="map">${COMPETENCY.map((k) => { const d = prev ? now[k] - (prev[k] || 1) : 0; return `<div class="mrow"><span>${esc(k)}</span><span class="stars">${starHTML(now[k])}${d > 0 ? `<em class="delta">+${d}</em>` : ''}</span></div>`; }).join('')}</div></div>
       </div>
       <p class="fc-used">Used: ${esc(fns.join(' / ') || '—')}</p>
       ${S.kpi.firstFormulaMs ? `<p class="fc-kpi">最初の役に立つ式まで ${Math.round(S.kpi.firstFormulaMs / 1000)}秒</p>` : ''}
@@ -1159,7 +1182,7 @@
     $('#cHome', w).onclick = home;
   }
   RENDER.card = (w) => renderCard(w);
-  function renderMyWork(w) {
+  function renderMyWork(w, o = {}) {
     w.innerHTML = `<div class="mywork"><h2>明日の仕事で何に使えそう？</h2><p class="muted">1つだけ選ぼう。小さく1回、が定着のコツ。</p>
       <div class="opts">${D.myWork.map((m) => `<button class="opt" data-id="${m.id}">□ ${esc(m.t)}</button>`).join('')}</div><div id="tm"></div></div>`;
     $$('.opt', w).forEach((b) => (b.onclick = () => {
@@ -1168,11 +1191,15 @@
       const m = D.myWork.find((x) => x.id === b.dataset.id);
       S.tomorrow = { job: m.id, mission: m.mission, date: todayKey() }; save();
       $('#tm', w).innerHTML = `<div class="tomorrow-card"><span class="badge yellow">TOMORROW MISSION</span><p>${esc(m.mission)}</p><small>困ったら ⚡10秒RESCUE。使えたら、トップ画面で「使えた！」を押してね。</small></div>
-        <p class="clear-msg">学習の終了をCLEARとしない。<br><b>実務で使えた瞬間を、本当のCLEARとする。</b></p><button class="btn primary" id="tmOk">トップへ</button>`;
-      $('#tmOk', w).onclick = home;
+        <p class="clear-msg">学習の終了をCLEARとしない。<br><b>実務で使えた瞬間を、本当のCLEARとする。</b></p><button class="btn primary" id="tmOk">${o.inModal ? 'OK（この画面に戻る）' : 'トップへ'}</button>`;
+      $('#tmOk', w).onclick = o.inModal ? () => { closeOverlay(); const ce = $('#ceWork'); if (ce) ce.closest('.ce-work').innerHTML = '<span class="small">📌 TOMORROW MISSION を設定しました</span>'; } : home;
     }));
   }
   RENDER.mywork = (w) => renderMyWork(w);
+  function openMyWorkModal() {
+    modal('<div class="mywork-modal"></div>');
+    renderMyWork($('.mywork-modal'), { inModal: true });
+  }
 
   // ===================== RESCUE =====================
   const RESCUE_JOB = { sumifs: 'sum', countifs: 'count', xlookup: 'lookup', if: 'judge', trim: 'clean', iferror: 'error' };
@@ -1225,8 +1252,9 @@
     modal(`<div class="exit"><h2>ここで終わっても大丈夫。</h2>
       ${gained.size ? '<p>今日持ち帰れるもの：</p><ul class="gained">' + [...gained].map((g) => '<li>✓ ' + esc(g) + '</li>').join('') + '</ul>' : '<p>今日の1つ：<b>困ったら ⚡10秒RESCUE で式をコピーできる</b>。</p>'}
       <p class="muted small">続きは QUEST MAP からいつでも再開できます。</p>
-      <div class="row gap center"><button class="btn ghost" data-close>続ける</button><button class="btn primary" id="exitYes">終える</button></div></div>`);
+      <div class="row gap center"><button class="btn ghost" data-close>続ける</button>${S.tomorrow && S.tomorrow.date === todayKey() ? '' : '<button class="btn" id="exitWork">📌 明日の1回を決めて終える</button>'}<button class="btn primary" id="exitYes">終える</button></div></div>`);
     $('#exitYes').onclick = () => { modal.cb = null; closeOverlay(); home(); };
+    if ($('#exitWork')) $('#exitWork').onclick = () => { modal.cb = null; closeOverlay(); stopRun(); setTop('MY WORK BRIDGE'); app().innerHTML = '<div class="mission solo"><div class="work"></div></div>'; renderMyWork($('.mission .work')); };
   }
 
   // ===================== SETTINGS =====================

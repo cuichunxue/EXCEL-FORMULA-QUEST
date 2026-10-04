@@ -89,8 +89,24 @@ const url = 'file://' + path.resolve(__dirname, '..', 'index.html');
         await click('#bf .opt[data-k="trim"]'); await click('#bf .opt[data-k="num"]'); await click('#bfok');
         await page.waitForTimeout(200); await snap(tag + '_c'); await click('#nx'); break;
       }
-      case 'chapterEnd': await snap(tag); if (await page.locator('#goNext').count()) await click('#goNext'); else await click('#toCard'); break;
-      case 'card': await snap(tag); await click('#cWork'); await click('.mywork .opt'); await snap(tag + '_mywork'); await click('#tmOk'); return false;
+      case 'chapterEnd':
+        await snap(tag);
+        if (info.w.id === 'c1') { // 章末から MY WORK BRIDGE を設定できる
+          await click('#ceWork'); await click('.mywork-modal .opt'); await click('#tmOk');
+          const tm = await page.evaluate(() => window.EFQApp.state().tomorrow);
+          if (!tm) errors.push('tomorrow mission not set from chapter end');
+          if (!(await page.locator('#goNext').count())) errors.push('chapter end lost after MY WORK modal');
+        }
+        if (await page.locator('#goNext').count()) await click('#goNext'); else await click('#toCard');
+        break;
+      case 'card':
+        await snap(tag);
+        if (info.w.id === 'c7') {
+          const head = await page.locator('.fc-grid h4').first().innerText();
+          const jobsTxt = await page.locator('.fc-jobs').innerText();
+          if (!/今日/.test(head) || !/→/.test(jobsTxt)) errors.push('card is not today-based: ' + head + ' / ' + jobsTxt.slice(0, 60));
+        }
+        await click('#cWork'); await click('.mywork .opt'); await snap(tag + '_mywork'); await click('#tmOk'); return false;
       default: throw new Error('unknown step ' + st.type);
     }
     return true;
@@ -98,6 +114,10 @@ const url = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // main quest c1..c7 (with some deliberate mistakes to exercise fail paths)
   await click('.job[data-job="sum"]');
+  // 初回だけ60秒CHALLENGEの提案が出る（既定はこのまま始める）
+  if (!(await page.locator('.offer').count())) errors.push('first-visit challenge offer not shown');
+  await snap('offer');
+  await click('#offerGo');
   let n = 0;
   while (await solve(n % 5 === 2)) { n++; if (n > 200) throw new Error('loop'); }
   await page.waitForTimeout(200);
@@ -131,6 +151,13 @@ const url = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => window.EFQApp.startMission('c2'));
   await click('#go');
   for (let i = 1; i <= 2; i++) await click(`.opt[data-k="${i}"]`);
+  // ✕で終えるときも明日の1回を決められる
+  await page.evaluate(() => { const st = window.EFQApp.state(); st.tomorrow = null; localStorage.setItem('efq.v1', JSON.stringify(st)); });
+  await page.reload();
+  await page.evaluate(() => window.EFQApp.startMission('c2'));
+  await click('#go'); await click('#exitBtn'); await click('#exitWork'); await click('.mywork .opt'); await snap('exit_mywork');
+  if (!(await page.evaluate(() => window.EFQApp.state().tomorrow))) errors.push('tomorrow mission not set from exit');
+  await click('#tmOk');
   // 「提出」は失敗に数えない（WAITは発見イベント）
   await page.evaluate(() => { localStorage.clear(); });
   await page.reload();

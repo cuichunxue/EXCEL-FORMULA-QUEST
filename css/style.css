@@ -468,6 +468,14 @@ b.bad { color: var(--red); } b.good { color: var(--green); }
 .modal, .rescue { width: min(720px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--paper); color: var(--text); border-radius: 18px; padding: 22px; box-shadow: var(--shadow); }
 .modal h2 { margin-top: 0; }
 .adaptive { display: flex; gap: 18px; align-items: center; }
+.offer { display: flex; gap: 18px; align-items: center; }
+.offer h2 { margin: 0 0 6px; font-size: 20px; }
+.offer p { margin: 0 0 8px; }
+.ce-work { margin-top: 14px; }
+.chapter-end .btn.ghost, .exit .btn:not(.primary) { color: var(--blue); }
+.fc-sub { font-size: 11px; color: var(--on-dark-muted); font-weight: 400; margin-left: 6px; }
+.delta { font-style: normal; font-size: 11px; font-weight: 900; color: var(--navy); background: var(--yellow); border-radius: 999px; padding: 0 6px; margin-left: 6px; }
+.fc-jobs li small b { color: var(--yellow); }
 .adaptive .say { font-size: 20px; font-weight: 800; margin-top: 0; }
 .realwin { text-align: center; }
 .big-emoji { font-size: 56px; }
@@ -525,7 +533,7 @@ b.bad { color: var(--red); } b.good { color: var(--green); }
   .excel-result { grid-template-columns: 1fr; }
   .fc-grid { grid-template-columns: 1fr; }
   .rs-jobs { grid-template-columns: repeat(2, 1fr); }
-  .adaptive, .challenge-intro { flex-direction: column; text-align: center; }
+  .adaptive, .challenge-intro, .offer { flex-direction: column; text-align: center; }
   .rp-row { grid-template-columns: 1fr auto; }
   .rp-st { grid-column: 1 / -1; text-align: left; }
   .guide .hints, .guide .support { flex-basis: 100%; }

@@ -327,9 +327,14 @@
     },
     // ---------- 第7章 BRIDGE → CARD → MY WORK ----------
     c7: {
-      mins: 5, title: 'BRIDGE MISSION', chapter: 7, job: 'sum', next: null,
+      mins: 6, title: 'BRIDGE MISSION', chapter: 7, job: 'sum', next: null,
       steps: [
         { type: 'talk', who: 'support', text: '本物の現場ファイルはこんな感じ。列名もバラバラ、空白行、古い式のエラー…。でも「JobとLogicは同じ」だよ。' },
+        { type: 'build', skill: 'BUILD', sheet: '生産実績', title: 'WARM-UP', forceLevel: 2, request: 'ラインAの10月の生産数を求めて。今回は関数名と形だけ見せます。', job: 'sum', expect: 1252, fns: ['SUMIFS'],
+          template: { fn: 'SUMIFS', slots: [{ label: '合計するもの', ans: ['D:D'], chips: [] }, { label: '条件範囲①', ans: ['B:B'], chips: [] }, { label: '条件①', ans: ['"A"'], chips: [] }, { label: '条件範囲②', ans: ['C:C'], chips: [] }, { label: '条件②', ans: ['"10月"'], chips: [] }] },
+          hints: H('合計するのは生産数。条件はライン＝A、月＝10月。', '複数条件の合計。', 'SUMIFS。', '=SUMIFS(合計する列, 条件の列1, 条件1, 条件の列2, 条件2)', '=SUMIFS(D:D,B:B,"A",C:C,"10月")'),
+          mistakes: [{ v: 1982, msg: 'ラインAの全期間になっています。10月の条件は？' }],
+          success: { title: 'FORMULA WORKED!', meaning: '関数名と形さえ分かれば、自分で書ける（SUPPORT C）' } },
         { type: 'bridge', skill: 'TRANSFER', sheet: '10月実績(最終)', title: 'BRIDGE MISSION', request: 'Bラインの10月の生産数を出して。', correct: 1248 },
         { type: 'card' },
         { type: 'mywork' },
@@ -338,7 +343,7 @@
 
     // ===================== JOB MINI MISSIONS =====================
     lookup: {
-      mins: 7, title: 'マスター検索', job: 'lookup', next: null, mini: true,
+      mins: 8, title: 'マスター検索', job: 'lookup', next: null, mini: true,
       steps: [
         { type: 'talk', who: 'navi', voice: 'start', text: '出荷指示に品名を自動で出したい。マスター表から「探して持ってくる」仕事だよ。' },
         { type: 'choice', tag: 'WHAT', skill: 'WHAT', sheet: '出荷指示', title: 'WHAT', request: 'A2の品番（A-002）の品名を、マスターから表示して。',
@@ -359,11 +364,19 @@
         { type: 'detect', skill: 'DETECT', sheet: 'マスター', title: 'FORMULA DETECTIVE', request: '品番 A-003 の品名', formula: '=XLOOKUP("A-003",マスター!A:A,マスター!C:C)', correct: 'ハウジング',
           causes: [{ t: '持ってくる列が違う', ok: true }, { t: '探す値が違う', fb: 'A-003 で合っています。' }, { t: '問題なし', fb: 'マスターの見出しを見てみよう。' }], explain: '「加工」は工程の列。品名はB列です。エラーは出ません。' },
         { type: 'debug', skill: 'DEBUG', sheet: '出荷指示', title: 'DEBUG MISSION', cell: 'B5', formula: '=XLOOKUP(A5,マスター!A:A,マスター!B:B)', variant: 'fullwidth' },
+        { type: 'build', skill: 'BUILD', sheet: '出荷指示', title: 'RECOVERY', recovery: true, request: 'A4の品番（A-003）の品名を、マスターから表示して。', job: 'lookup', expect: 'ハウジング', fns: ['XLOOKUP', 'VLOOKUP'],
+          template: { fn: 'XLOOKUP', slots: [
+            { label: '探す値', ans: ['A4'], chips: ['A4', 'C4'] },
+            { label: '探す場所', ans: ['マスター!A:A'], chips: ['マスター!A:A', 'マスター!C:C'] },
+            { label: '持ってくる列', ans: ['マスター!B:B'], chips: ['マスター!B:B', 'マスター!C:C'] }] },
+          hints: H('さっきと同じ形。探す値だけ A4 に変える。', '探して持ってくる系。', 'XLOOKUP。', '=XLOOKUP(探す値, マスター!品番の列, マスター!品名の列)', '=XLOOKUP(A4,マスター!A:A,マスター!B:B)'),
+          mistakes: [{ v: '加工', msg: '「加工」は工程の列です。品名はどの列？' }],
+          success: { title: 'RECOVERED!', meaning: '同じ形の式は、探す値を変えるだけで使い回せる' } },
         { type: 'card', mini: true },
       ],
     },
     judge: {
-      mins: 5, title: '自動判定', job: 'judge', next: null, mini: true,
+      mins: 6, title: '自動判定', job: 'judge', next: null, mini: true,
       steps: [
         { type: 'talk', who: 'navi', voice: 'start', text: '検査結果をOK/NGで自動判定しよう。基準は「測定値が400以上ならOK」。' },
         { type: 'choice', tag: 'LOGIC', skill: 'LOGIC', sheet: '検査結果', title: 'LOGIC', request: '測定値が400以上ならOK、それ以外はNG。',
@@ -383,6 +396,14 @@
           prompt: 'L-03（測定値 400 ちょうど）の結果を予想しよう。', options: [{ t: 'OK', ok: true, fb: '正解。400 >= 400 は「正しい」。' }, { t: 'NG', fb: '400は「400以上」に含まれます。' }] },
         { type: 'detect', skill: 'DETECT', sheet: '検査結果', title: 'FORMULA DETECTIVE', request: 'L-03（B4）を判定。400以上ならOK。', formula: '=IF(B4>400,"OK","NG")', correct: 'OK',
           causes: [{ t: '境界値（ちょうど400）の扱いが違う', ok: true }, { t: 'OKとNGが逆', fb: '400より大きい値はOKになっていて、逆ではありません。' }, { t: '問題なし', fb: 'L-03 は 400 ちょうど。基準は「以上」です。' }], explain: '「>」だと400ちょうどがNGになります。合格品が不合格扱いに。' },
+        { type: 'build', skill: 'BUILD', sheet: '検査結果', title: 'RECOVERY', recovery: true, request: 'L-03（B4・測定値400ちょうど）を正しく判定して。400以上ならOK。', job: 'judge', expect: 'OK', fns: ['IF'],
+          template: { fn: 'IF', slots: [
+            { label: '判定条件', ans: ['B4>=400'], chips: ['B4>=400', 'B4>400'] },
+            { label: '正しいとき', ans: ['"OK"'], chips: ['"OK"', '"NG"'] },
+            { label: '違うとき', ans: ['"NG"'], chips: ['"NG"', '"OK"'] }] },
+          hints: H('「以上」は、ちょうどの値も含む。', '判定する系。', 'IF。', '=IF(B4>=400, "OK", "NG")', '=IF(B4>=400,"OK","NG")'),
+          mistakes: [{ v: 'NG', msg: '400ちょうどが NG になっています。「以上」の記号は？' }],
+          success: { title: 'RECOVERED!', meaning: '境界値（ちょうどの値）を1つ試すと、判定式の間違いに気づける' } },
         { type: 'card', mini: true },
       ],
     },
@@ -430,7 +451,7 @@
       ],
     },
     error: {
-      mins: 6, title: 'エラー確認', job: 'error', next: null, mini: true,
+      mins: 7, title: 'エラー確認', job: 'error', next: null, mini: true,
       steps: [
         { type: 'talk', who: 'navi', voice: 'start', text: 'エラーは失敗じゃなくて「手がかり」。消すのではなく、原因を見つけよう。' },
         { type: 'debug', skill: 'DEBUG', sheet: '出荷指示', title: 'DEBUG MISSION', cell: 'B5', formula: '=XLOOKUP(A5,マスター!A:A,マスター!B:B)', variant: 'fullwidth' },
@@ -440,6 +461,15 @@
             { t: '問題なし。表がきれいになった', fb: '空白で隠しただけ。B-003 がマスターにない問題は残っています。' },
             { t: 'マスター未登録が隠れて、誰も気づけなくなる', ok: true, fb: '正解。隠すなら「マスター未登録」など、気づける表示に。' },
           ] },
+        { type: 'build', skill: 'BUILD', sheet: '出荷指示', title: 'RECOVERY', recovery: true, request: 'A6（B-003）の品名を出して。マスターにないときは「マスター未登録」と表示して、気づけるようにしよう。', job: 'error', expect: 'マスター未登録', fns: ['XLOOKUP'],
+          template: { fn: 'XLOOKUP', slots: [
+            { label: '探す値', ans: ['A6'], chips: ['A6', 'C6'] },
+            { label: '探す場所', ans: ['マスター!A:A'], chips: ['マスター!A:A', 'マスター!B:B'] },
+            { label: '持ってくる列', ans: ['マスター!B:B'], chips: ['マスター!B:B', 'マスター!E:E'] },
+            { label: '見つからない時', ans: ['"マスター未登録"'], chips: ['"マスター未登録"', '""', '0'] }] },
+          hints: H('見つからないときに出す文字を、4つ目に指定できる。', '探して持ってくる系。', 'XLOOKUP の4つ目の引数。', '=XLOOKUP(探す値, 探す場所, 持ってくる列, "見つからない時")', '=XLOOKUP(A6,マスター!A:A,マスター!B:B,"マスター未登録")'),
+          mistakes: [{ v: '', msg: '空白だと、未登録に誰も気づけません。気づける文字にしよう。' }, { v: 0, msg: '0 だと単価0円のように見えてしまいます。' }],
+          success: { title: 'RECOVERED!', meaning: 'エラーは隠さず、気づける形で表示する' } },
         { type: 'card', mini: true },
       ],
     },
