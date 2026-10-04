@@ -98,14 +98,16 @@
     const sh = wb[name];
     const n = sh.headers.length;
     const cols = Array.from({ length: n }, (_, i) => F.numToCol(i + 1));
-    let h = '<div class="sheet-wrap"><table class="sheet" data-sheet="' + esc(name) + '"><thead><tr><th class="corner"></th>';
+    let h = '<div class="sheet-wrap"><table class="sheet" data-sheet="' + esc(name) + '"' + (o.rowFocus === 'select' ? ' role="grid" aria-multiselectable="true" aria-label="行をEnterまたはスペースで選択"' : '') + '><thead><tr><th class="corner"></th>';
     cols.forEach((c) => (h += '<th class="colh" data-col="' + c + '" title="クリックで式に ' + c + ':' + c + ' を入れる">' + c + '</th>'));
     h += '</tr></thead><tbody><tr class="hdr" data-row="1"><td class="rn">1</td>';
     sh.headers.forEach((t, i) => (h += '<td data-col="' + cols[i] + '" data-row="1">' + esc(t) + '</td>'));
     h += '</tr>';
     sh.rows.forEach((row, i) => {
       const r = i + 2;
-      h += '<tr data-row="' + r + '" class="' + (o.rowClass ? o.rowClass(r) || '' : '') + '"><td class="rn">' + r + '</td>';
+      const rc = o.rowClass ? o.rowClass(r) || '' : '';
+      const focus = o.rowFocus ? ' tabindex="0"' + (o.rowFocus === 'select' ? ' aria-selected="' + /\bpicked\b/.test(rc) + '"' : '') : '';
+      h += '<tr data-row="' + r + '" class="' + rc + '"' + focus + '><td class="rn">' + r + '</td>';
       cols.forEach((c, ci) => {
         let v = row[ci];
         let extra = '';
@@ -212,6 +214,7 @@
       const valueCol = isLookup ? tr.returnCol : tr.valueCol;
       const off = tr.rowOffset || 0;
       const html = sheetHTML(wb, tsheet, {
+        rowFocus: true,
         showSpaces: true, showWide: true,
         rowClass: (r) => {
           if (!tr.scanRows.includes(r) && !(st.glow && glowRows.has(r))) return 'out';
@@ -298,6 +301,8 @@
           </div>
         </div>
       </section>
+      ${S.resume && D.missions[S.resume.id] ? `<section class="panel resume"><div><span class="badge blue">続きから</span> <b>${esc(resumeLabel(S.resume))}</b><span class="muted small"> ・ ${esc(S.resume.date)} に中断</span></div>
+        <div class="row gap"><button class="btn primary" id="resumeGo">続きから再開 ▶</button><button class="btn ghost" id="resumeDrop">章の最初からにする</button></div></section>` : ''}
       ${tm ? `<section class="panel tomorrow">
         <div class="tm-head"><span class="badge yellow">TOMORROW MISSION</span><span class="muted">${esc(tm.date)} に設定</span></div>
         <p class="tm-mission">${esc(tm.mission)}</p>
@@ -330,6 +335,10 @@
       </footer>`;
     $$('.job').forEach((b) => (b.onclick = () => { sfx('click'); const j = D.jobs.find((x) => x.id === b.dataset.job); startJob(j); }));
     $('#goChallenge').onclick = () => { sfx('click'); challenge(); };
+    if ($('#resumeGo')) {
+      $('#resumeGo').onclick = () => { sfx('click'); startMission(S.resume.id, S.resume); };
+      $('#resumeDrop').onclick = () => { const id = S.resume.id; S.resume = null; save(); startMission(id); };
+    }
     $('#goMap').onclick = () => { sfx('click'); questMap(); };
     $('#goRescue').onclick = () => openRescue();
     if ($('#goCard')) $('#goCard').onclick = () => { stopRun(); app().innerHTML = '<div class="mission solo"></div>'; renderCard($('.mission'), { standalone: true }); };
@@ -447,14 +456,32 @@
   const starHTML = (n) => '<span class="on">' + '★'.repeat(n) + '</span><span class="off">' + '★'.repeat(5 - n) + '</span>';
 
   // ===================== MISSION RUNNER =====================
-  function startMission(id) {
+  function startMission(id, resume) {
     stopRun();
     const m = D.missions[id];
     const cap = $('#caption'); if (cap) cap.classList.remove('show');
-    run = { id, m, i: 0, wb: clone(D.workbook), fails: 0, gained: [], reportFix: {}, t0: Date.now() };
+    run = { id, m, i: 0, wb: clone(D.workbook), fails: 0, gained: [], reportFix: {}, patches: [], t0: Date.now() };
+    if (resume && resume.id === id) {
+      run.i = Math.min(resume.i, m.steps.length - 1);
+      run.reportFix = Object.assign({}, resume.reportFix || {});
+      (resume.patches || []).forEach(applyPatch);
+      run.gained = (resume.gained || []).slice();
+    }
     if (m.final && S.timer) run.deadline = Date.now() + 5 * 60 * 1000;
     session.jobs.add(m.job);
     renderStep();
+  }
+  // ブックへの変更（データ修正）を記録しておき、途中再開時に再現する
+  function applyPatch(pt) { const sh = run.wb[pt.sheet]; if (sh && sh.rows[pt.r]) sh.rows[pt.r][pt.c] = pt.v; run.patches.push(pt); }
+  function saveResume() {
+    if (!run) return;
+    const st = run.m.steps[run.i];
+    if (run.i === 0 || !st || ['chapterEnd', 'card', 'mywork'].includes(st.type)) { if (S.resume && S.resume.id === run.id) { S.resume = null; save(); } return; }
+    S.resume = { id: run.id, i: run.i, reportFix: run.reportFix, patches: run.patches, gained: run.gained, date: todayKey() }; save();
+  }
+  function resumeLabel(r) {
+    const m = D.missions[r.id]; const st = m.steps[r.i] || {};
+    return (m.chapter ? '第' + m.chapter + '章 ' : 'Job ') + m.title + (st.clock ? '（' + st.clock + '〜）' : '') + ' ・ ステップ ' + (r.i + 1) + ' / ' + m.steps.length;
   }
   function stopRun() {
     run = null;
@@ -478,6 +505,7 @@
     const step = run.m.steps[run.i];
     if (!step) return home();
     run.hint = 0; run.stepFails = 0; run.shownAnswer = false; run.bridgeHints = null;
+    saveResume();
     const total = run.m.steps.length;
     const dots = run.m.steps.map((_, i) => '<i class="' + (i < run.i ? 'done' : i === run.i ? 'on' : '') + '"></i>').join('');
     const clock = step.clock ? '<span class="clock" id="clock">' + esc(step.clock) + '</span>' : '';
@@ -852,10 +880,10 @@
       <ol class="v-checks">
         <li id="v1" class="on"><b>① 対象は正しい？</b><p>この式が合計しているのは、どの列？</p><div class="opts small">${sh.headers.map((h, i) => `<button class="opt" data-h="${esc(h)}">${esc(F.numToCol(i + 1))}：${esc(h)}</button>`).join('')}</div></li>
         <li id="v2"><b>② 条件は全部ある？</b><p>依頼に必要な条件をすべて選ぶと、式の条件と照合します。</p><div class="opts small">${[...s.conds, ...s.decoys].sort().map((c) => `<button class="opt" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><button class="btn sm" id="v2ok">照合する</button></li>
-        <li id="v3"><b>③ 数件確認すると一致する？</b><p>表の中で、依頼に合う行をクリックして選ぼう（フィルターの代わり）。</p><div class="v-sum">選んだ行の合計：<b id="vsum">0</b> ／ 式の結果：<b>${esc(fmt(res.value))}</b></div><button class="btn sm" id="v3ok">一致を確認</button></li>
+        <li id="v3"><b>③ 数件確認すると一致する？</b><p>表の中で、依頼に合う行をクリックして選ぼう（フィルターの代わり）。<span class="small muted">キーボードは Tab で行へ移動し、Enter かスペースで選択。</span></p><div class="v-sum">選んだ行の合計：<b id="vsum">0</b> ／ 式の結果：<b>${esc(fmt(res.value))}</b></div><button class="btn sm" id="v3ok">一致を確認</button></li>
       </ol><div class="feedback" id="fb"></div><div id="after"></div>
       <p class="muted small">他の検証方法：概算 / 手計算 / フィルター / 元データ / 別の式で計算</p></div>
-      <div class="sheet-area">${tabsHTML([s.sheet], s.sheet)}${sheetHTML(run.wb, s.sheet)}</div>`;
+      <div class="sheet-area">${tabsHTML([s.sheet], s.sheet)}${sheetHTML(run.wb, s.sheet, { rowFocus: 'select' })}</div>`;
     const tick = setInterval(() => { const el = $('#vt', w); if (!el) return clearInterval(tick); el.textContent = ((Date.now() - t0) / 1000).toFixed(1) + '秒'; }, 100);
     const fb = $('#fb', w);
     let phase = 1;
@@ -880,7 +908,7 @@
       if (phase !== 3) return;
       const r = +tr.dataset.row; if (r < 2) return;
       if (picked.has(r)) picked.delete(r); else picked.add(r);
-      tr.classList.toggle('picked');
+      tr.classList.toggle('picked'); tr.setAttribute('aria-selected', tr.classList.contains('picked'));
       const col = s.target.col;
       $('#vsum', w).textContent = fmt([...picked].reduce((a, x) => a + (Number(F.cellValue(sh, col, x)) || 0), 0));
     }));
@@ -957,7 +985,7 @@
         if (!f.ok) { fbn.classList.add('wrong'); fbn.disabled = true; fb2.className = 'feedback bad'; fb2.textContent = f.fb; fail('REPAIR'); return; }
         fbn.classList.add('right'); $$('#fixes .opt', w).forEach((x) => (x.disabled = true));
         succeed('REPAIR'); sfx('correct'); raise('error', 'PRACTICED');
-        if (variant === 'fullwidth') run.wb[sheet].rows[row - 2][0] = 'A-001';
+        if (variant === 'fullwidth') applyPatch({ sheet, r: row - 2, c: 0, v: 'A-001' });
         else computed.B = (r) => (r === row ? '=XLOOKUP(A' + r + ',マスター!A:A,マスター!B:B,"マスター未登録")' : '=XLOOKUP(A' + r + ',マスター!A:A,マスター!B:B)');
         $('#dsheet', w).innerHTML = tabsHTML([sheet, 'マスター'], sheet) + draw();
         bindTabs(w, '#dsheet', [sheet, 'マスター'], (n) => (n === sheet ? draw() : sheetHTML(run.wb, n, { showWide: true })));
@@ -1034,7 +1062,7 @@
     let phase = 1, userF = null, userV = null;
     const picked = new Set();
     run.bridgeHints = ['依頼は前と同じ。「生産数」を「ライン＝B」かつ「月＝10月」で合計。列名が違うだけ。', '複数条件の合計。', 'SUMIFS。', '=SUMIFS(生産数の列, ﾗｲﾝ名の列, "Bライン", 月の列, "10月")', '=SUMIFS(F:F,C:C,"Bライン",E:E,"10月")'];
-    const draw = (opts = {}) => sheetHTML(run.wb, sheet, Object.assign({ showSpaces: phase >= 3, rowClass: (r) => (picked.has(r) ? 'picked' : '') }, opts));
+    const draw = (opts = {}) => sheetHTML(run.wb, sheet, Object.assign({ showSpaces: phase >= 3, rowFocus: 'select', rowClass: (r) => (picked.has(r) ? 'picked' : '') }, opts));
     w.innerHTML = requestHTML(s) +
       `<div class="bridge-note"><b>🌉 BRIDGE</b>：実務風の列名・途中の空白行・古い式の #REF!・複数シート・不要な列。<br>でも <b>JobとLogicは同じ</b>。関数名の指定はありません。</div>
       <div id="bphase"></div><div class="feedback" id="fb"></div><div id="after"></div>
@@ -1053,7 +1081,7 @@
       const tr = e.target.closest('#bsheet tbody tr[data-row]');
       if (tr && phase === 2 && $('#bsheet .tab.on', w).dataset.tab === sheet) {
         const r = +tr.dataset.row; if (r < 2) return;
-        picked.has(r) ? picked.delete(r) : picked.add(r); tr.classList.toggle('picked');
+        picked.has(r) ? picked.delete(r) : picked.add(r); tr.classList.toggle('picked'); tr.setAttribute('aria-selected', tr.classList.contains('picked'));
         $('#vsum', w).textContent = fmt([...picked].reduce((a, x) => a + (Number(F.cellValue(run.wb[sheet], 'F', x)) || 0), 0));
         return;
       }
@@ -1251,7 +1279,7 @@
     Object.entries(session.skills).forEach(([k, v]) => { if (v.ok + v.as > 0) gained.add({ WHAT: '求めるものを見極める', LOGIC: '条件を分解する', CHOOSE: '仕事に合う道具を選ぶ', BUILD: '式を組み立てる', READ: '式を読む', PREDICT: '結果を予想する', DETECT: '間違いを発見する', REPAIR: '式を直す', VERIFY: '結果を検証する', DEBUG: 'エラー原因を調べる', 'AI REVIEW': 'AIの式を確認する', TRANSFER: '実務データに移す' }[k] || k); });
     modal(`<div class="exit"><h2>ここで終わっても大丈夫。</h2>
       ${gained.size ? '<p>今日持ち帰れるもの：</p><ul class="gained">' + [...gained].map((g) => '<li>✓ ' + esc(g) + '</li>').join('') + '</ul>' : '<p>今日の1つ：<b>困ったら ⚡10秒RESCUE で式をコピーできる</b>。</p>'}
-      <p class="muted small">続きは QUEST MAP からいつでも再開できます。</p>
+      <p class="muted small">${run.i > 0 ? '続きはトップの「続きから」で、このステップから再開できます。' : '続きは QUEST MAP からいつでも始められます。'}</p>
       <div class="row gap center"><button class="btn ghost" data-close>続ける</button>${S.tomorrow && S.tomorrow.date === todayKey() ? '' : '<button class="btn" id="exitWork">📌 明日の1回を決めて終える</button>'}<button class="btn primary" id="exitYes">終える</button></div></div>`);
     $('#exitYes').onclick = () => { modal.cb = null; closeOverlay(); home(); };
     if ($('#exitWork')) $('#exitWork').onclick = () => { modal.cb = null; closeOverlay(); stopRun(); setTop('MY WORK BRIDGE'); app().innerHTML = '<div class="mission solo"><div class="work"></div></div>'; renderMyWork($('.mission .work')); };
@@ -1280,7 +1308,12 @@
     $('#rescueBtn').onclick = () => openRescue();
     $('#soundBtn').onclick = () => { S.sound = !S.sound; save(); syncSoundBtn(); if (S.sound) sfx('click'); };
     $('#settingsBtn').onclick = settings;
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#overlay').hidden) closeOverlay(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !$('#overlay').hidden) return closeOverlay();
+      // 表の行：Enter / スペースでクリックと同じ動作（VERIFYの行選択・X-RAYの理由表示）
+      const tr = e.target.closest && e.target.closest('tr[data-row][tabindex]');
+      if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tr.click(); }
+    });
     syncSoundBtn();
     const hash = location.hash.replace('#', '');
     if (hash === 'rescue') { home(); openRescue(); } else if (D.missions[hash]) startMission(hash); else home();

@@ -158,6 +158,29 @@ const url = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await click('#go'); await click('#exitBtn'); await click('#exitWork'); await click('.mywork .opt'); await snap('exit_mywork');
   if (!(await page.evaluate(() => window.EFQApp.state().tomorrow))) errors.push('tomorrow mission not set from exit');
   await click('#tmOk');
+  // 途中再開：第6章のステップ2（レポート①修正済み）から戻れる
+  await page.evaluate(() => window.EFQApp.startMission('c6'));
+  await click('#go'); await click('#doubt'); await click('#stage .opt[data-k="0"]');
+  await page.fill('#rp #fin', '=SUMIFS(生産実績!D:D,生産実績!B:B,"B",生産実績!C:C,"10月")'); await click('#rp #runBtn'); await click('#nx');
+  await page.reload();
+  if (!(await page.locator('#resumeGo').count())) errors.push('resume panel not shown on home');
+  await snap('resume_home');
+  await click('#resumeGo');
+  const where = await page.evaluate(() => window.EFQApp.where());
+  if (!where || where.id !== 'c6' || where.i !== 2) errors.push('resume went to ' + JSON.stringify(where));
+  if (!(await page.locator('.rp-row.fixed').count())) errors.push('report fix not restored on resume');
+  // キーボードだけで VERIFY の行を選べる
+  await page.evaluate(() => window.EFQApp.startMission('c3'));
+  await page.evaluate(() => { const st = window.EFQData.missions.c3.steps; window.EFQApp.startMission('c3', { id: 'c3', i: st.findIndex((x) => x.type === 'verify') }); });
+  await click('#v1 .opt[data-h="生産数"]'); await click('#v2 .opt[data-c="ライン = B"]'); await click('#v2 .opt[data-c="月 = 10月"]'); await click('#v2ok');
+  await page.focus('.sheet-area tr[data-row="8"]'); await page.keyboard.press('Enter');
+  await page.focus('.sheet-area tr[data-row="11"]'); await page.keyboard.press(' ');
+  await page.focus('.sheet-area tr[data-row="14"]'); await page.keyboard.press('Enter');
+  const sel = await page.locator('.sheet-area tr[aria-selected="true"]').count();
+  if (sel !== 3) errors.push('keyboard row selection: ' + sel + ' rows selected');
+  await page.focus('#v3ok'); await page.keyboard.press('Enter');
+  if (!(await page.locator('.verified').count())) errors.push('verify not completed by keyboard');
+  await snap('keyboard_verify');
   // 「提出」は失敗に数えない（WAITは発見イベント）
   await page.evaluate(() => { localStorage.clear(); });
   await page.reload();

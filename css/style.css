@@ -319,6 +319,10 @@ h1 { margin: 0; font-size: clamp(30px, 5.4vw, 56px); line-height: 1.05; font-wei
 .sheet tr.picked td:not(.rn) { background: var(--blue-soft); }
 .sheet tr.picked td.rn { background: var(--blue); color: #fff; }
 .sheet tr.focus td { background: #fff1f1; }
+.sheet tr[tabindex]:focus-visible { outline: 3px solid var(--yellow); outline-offset: -3px; }
+.sheet tr[tabindex]:focus-visible td.rn { background: var(--yellow); color: var(--ink); }
+.resume { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; border-color: var(--blue); }
+.resume .muted { color: var(--on-dark-muted); }
 
 /* ---------- X-RAY ---------- */
 .xray { margin: 12px 0; padding: 14px; border-radius: 14px; background: #0f1a26; color: var(--on-dark); border: 1px solid #2c4360; }
